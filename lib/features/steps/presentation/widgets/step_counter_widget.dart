@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:fl_chart/fl_chart.dart';
 import '../../../auth/data/datasources/accelerometer_datasource.dart';
 import '../../../auth/domain/entities/step_data.dart';
 
@@ -9,18 +10,32 @@ import '../../../auth/domain/entities/step_data.dart';
 /// - Usa StreamSubscription para escuchar el EventChannel
 /// - Actualiza UI cada vez que llegan nuevos datos
 class StepCounterWidget extends StatefulWidget {
-  const StepCounterWidget({super.key});
+  final AccelerometerDataSource? dataSource;
+  final void Function(ActivityType type)? onActivityChanged;
+
+  const StepCounterWidget({
+    super.key,
+    this.dataSource,
+    this.onActivityChanged,
+  });
 
   @override
   State<StepCounterWidget> createState() => _StepCounterWidgetState();
 }
 
 class _StepCounterWidgetState extends State<StepCounterWidget> {
-  final AccelerometerDataSource _dataSource = AccelerometerDataSourceImpl();
+  late final AccelerometerDataSource _dataSource;
 
   StreamSubscription<StepData>? _subscription;
   StepData? _currentData;
   bool _isTracking = false;
+  final List<double> _magnitudeHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _dataSource = widget.dataSource ?? AccelerometerDataSourceImpl();
+  }
 
   @override
   void dispose() {
@@ -58,7 +73,12 @@ class _StepCounterWidgetState extends State<StepCounterWidget> {
       (data) {
         setState(() {
           _currentData = data;
+          _magnitudeHistory.add(data.rawMagnitude);
+          if (_magnitudeHistory.length > 50) {
+            _magnitudeHistory.removeAt(0);
+          }
         });
+        _checkActivityChange(data.activityType);
       },
       onError: (error) {
         print('Error en stream: $error');
@@ -77,6 +97,10 @@ class _StepCounterWidgetState extends State<StepCounterWidget> {
     setState(() {
       _isTracking = false;
     });
+  }
+
+  void _checkActivityChange(ActivityType newType) {
+    widget.onActivityChanged?.call(newType);
   }
 
   @override
@@ -106,6 +130,39 @@ class _StepCounterWidgetState extends State<StepCounterWidget> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+
+            // Gráfica en vivo de magnitud
+            SizedBox(
+              height: 120,
+              child: _magnitudeHistory.length < 2
+                  ? const Center(child: Text('Esperando datos...', style: TextStyle(color: Colors.grey)))
+                  : LineChart(
+                      LineChartData(
+                        gridData: const FlGridData(show: false),
+                        titlesData: const FlTitlesData(show: false),
+                        borderData: FlBorderData(show: false),
+                        minY: 0,
+                        maxY: 30,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: List.generate(
+                              _magnitudeHistory.length,
+                              (i) => FlSpot(i.toDouble(), _magnitudeHistory[i]),
+                            ),
+                            isCurved: true,
+                            color: const Color(0xFF6366F1),
+                            barWidth: 2.5,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: const Color(0xFF6366F1).withOpacity(0.15),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
             const Divider(),
 

@@ -7,13 +7,8 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.util.concurrent.Executor
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import kotlin.math.sqrt
 import io.flutter.plugin.common.EventChannel
+import java.util.concurrent.Executor
 import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
@@ -31,7 +26,6 @@ class MainActivity: FlutterFragmentActivity() {
 
     // PASO 1: Definir nombre del canal (DEBE coincidir con Dart)
     private val BIOMETRIC_CHANNEL = "com.tuinstituto.fitness/biometric"
-    private val ACCELEROMETER_CHANNEL = "com.tuinstituto.fitness/accelerometer"
     private val GPS_CHANNEL = "com.tuinstituto.fitness/gps"
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
 
@@ -83,7 +77,6 @@ class MainActivity: FlutterFragmentActivity() {
                 }
             }
         }
-        setupAccelerometerChannel(flutterEngine)
         setupGpsChannel(flutterEngine)
     }
 
@@ -148,149 +141,6 @@ class MainActivity: FlutterFragmentActivity() {
         biometricPrompt.authenticate(promptInfo)
     }
 
-    /**
-        * Configurar EventChannel para acelerómetro
-        *
-        * EXPLICACIÓN DIDÁCTICA:
-        * - EventChannel.StreamHandler tiene 2 métodos:
-        *   1. onListen: cuando Flutter comienza a escuchar
-        *   2. onCancel: cuando Flutter deja de escuchar
-        */
-        private fun setupAccelerometerChannel(flutterEngine: FlutterEngine) {
-            val sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-            val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-
-            var stepCount = 0
-            var lastMagnitude = 0.0
-            var sensorEventListener: SensorEventListener? = null
-
-            // Variables para suavizado
-            val magnitudeHistory = mutableListOf<Double>()
-            val historySize = 10
-            var sampleCount = 0
-            var lastActivityType = "stationary"
-            var activityConfidence = 0
-
-            // ═══════════════════════════════════════════════════════════
-            // CONFIGURAR EVENT CHANNEL
-            // ═══════════════════════════════════════════════════════════
-            EventChannel(
-                flutterEngine.dartExecutor.binaryMessenger,
-                ACCELEROMETER_CHANNEL
-            ).setStreamHandler(object : EventChannel.StreamHandler {
-
-                /**
-                * onListen: Flutter comenzó a escuchar el stream
-                * AQUÍ iniciamos el sensor
-                */
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    sensorEventListener = object : SensorEventListener {
-
-                        override fun onSensorChanged(event: SensorEvent?) {
-                            event?.let {
-                                // Calcular magnitud del vector
-                                val x = it.values[0]
-                                val y = it.values[1]
-                                val z = it.values[2]
-                                val magnitude = sqrt((x * x + y * y + z * z).toDouble())
-
-                                // Promedio móvil para suavizar
-                                magnitudeHistory.add(magnitude)
-                                if (magnitudeHistory.size > historySize) {
-                                    magnitudeHistory.removeAt(0)
-                                }
-                                val avgMagnitude = magnitudeHistory.average()
-
-                                // Detectar paso
-                                if (magnitude > 12 && lastMagnitude <= 12) {
-                                    stepCount++
-                                }
-                                lastMagnitude = magnitude
-
-                                // Determinar actividad (con promedio)
-                                val newActivityType = when {
-                                    avgMagnitude < 10.5 -> "stationary"
-                                    avgMagnitude < 13.5 -> "walking"
-                                    else -> "running"
-                                }
-
-                                // Solo cambiar si hay confianza
-                                if (newActivityType == lastActivityType) {
-                                    activityConfidence++
-                                } else {
-                                    activityConfidence = 0
-                                }
-
-                                val finalActivityType = if (activityConfidence >= 3) {
-                                    newActivityType
-                                } else {
-                                    lastActivityType
-                                }
-                                lastActivityType = newActivityType
-
-                                // Enviar cada 3 muestras
-                                sampleCount++
-                                if (sampleCount >= 3) {
-                                    sampleCount = 0
-
-                                    // ENVIAR DATOS A FLUTTER
-                                    val data = mapOf(
-                                        "stepCount" to stepCount,
-                                        "activityType" to finalActivityType,
-                                        "magnitude" to avgMagnitude
-                                    )
-
-                                    // events?.success: envía datos al stream
-                                    events?.success(data)
-                                }
-                            }
-                        }
-
-                        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-                    }
-
-                    // Registrar listener del sensor
-                    sensorManager.registerListener(
-                        sensorEventListener,
-                        accelerometer,
-                        SensorManager.SENSOR_DELAY_GAME
-                    )
-                }
-
-                /**
-                * onCancel: Flutter dejó de escuchar
-                * AQUÍ detenemos el sensor
-                */
-                override fun onCancel(arguments: Any?) {
-                    sensorEventListener?.let {
-                        sensorManager.unregisterListener(it)
-                    }
-                    sensorEventListener = null
-                }
-            })
-
-            // MethodChannel auxiliar para control
-            MethodChannel(
-                flutterEngine.dartExecutor.binaryMessenger,
-                "$ACCELEROMETER_CHANNEL/control"
-            ).setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "start" -> {
-                        stepCount = 0
-                        result.success(null)
-                    }
-                    "stop" -> {
-                        result.success(null)
-                    }
-                    "reset" -> {
-                        stepCount = 0
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-        }
-    
     private fun setupGpsChannel(flutterEngine: FlutterEngine) {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         var locationListener: LocationListener? = null
