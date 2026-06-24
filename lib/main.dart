@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'features/auth/data/datasources/accelerometer_datasource.dart';
 import 'features/auth/data/datasources/biometric_datasource.dart';
+import 'features/auth/domain/entities/step_data.dart';
 import 'features/auth/domain/usecases/authenticate_user.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/steps/presentation/widgets/step_counter_widget.dart';
 import 'features/tracking/presentation/widgets/route_map_widget.dart';
+import 'features/welcome/presentation/pages/welcome_screen.dart';
+import 'features/history/domain/entities/activity_record.dart';
+import 'features/history/presentation/pages/history_page.dart';
+import 'features/history/data/datasources/activity_repository_impl.dart';
+import 'features/history/presentation/bloc/history_bloc.dart';
 import 'services/activity_announcer.dart';
 import 'services/fall_detector.dart';
 import 'widgets/fall_dialog.dart';
@@ -50,12 +56,15 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
+  bool _showLogin = false;
   bool _isAuthenticated = false;
 
+  void _onSwipeUp() {
+    setState(() => _showLogin = true);
+  }
+
   void _onAuthSuccess() {
-    setState(() {
-      _isAuthenticated = true;
-    });
+    setState(() => _isAuthenticated = true);
   }
 
   @override
@@ -63,7 +72,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (_isAuthenticated) {
       return const HomePage();
     }
-    return LoginPage(onAuthSuccess: _onAuthSuccess);
+    if (_showLogin) {
+      return LoginPage(onAuthSuccess: _onAuthSuccess);
+    }
+    return WelcomeScreen(onSwipeUp: _onSwipeUp);
   }
 }
 
@@ -75,9 +87,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _stepKey = GlobalKey<StepCounterWidgetState>();
+  final _routeKey = GlobalKey<RouteMapWidgetState>();
   final AccelerometerDataSource _dataSource = AccelerometerDataSourceImpl();
   final ActivityAnnouncer _announcer = ActivityAnnouncer();
   final FallDetector _fallDetector = FallDetector();
+  final _repository = ActivityRepositoryImpl();
 
   @override
   void initState() {
@@ -101,6 +116,56 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _saveToHistory() {
+    final stepState = _stepKey.currentState;
+    final routeState = _routeKey.currentState;
+
+    if (stepState == null) return;
+
+    final now = DateTime.now();
+    final category = stepState.activityType == ActivityType.walking
+        ? ActivityCategory.walking
+        : stepState.activityType == ActivityType.running
+            ? ActivityCategory.running
+            : ActivityCategory.other;
+
+    final route = routeState?.routeData;
+    final startTime = route?.startTime ?? now.subtract(const Duration(minutes: 30));
+    final endTime = route?.endTime ?? now;
+
+    final record = ActivityRecord(
+      category: category,
+      startTime: startTime,
+      endTime: endTime,
+      steps: stepState.stepCount,
+      distanceKm: route?.distanceKm ?? 0,
+      calories: stepState.calories + (route?.estimatedCalories ?? 0),
+      averageSpeedKmh: route?.averageSpeed ?? 0,
+    );
+
+    _repository.create(record).then((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Actividad guardada en el historial'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }).catchError((e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -109,17 +174,40 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: const Color(0xFF6366F1),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save_outlined),
+            tooltip: 'Guardar en historial',
+            onPressed: _saveToHistory,
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Historial',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider(
+                    create: (_) => HistoryBloc(ActivityRepositoryImpl()),
+                    child: const HistoryPage(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             StepCounterWidget(
+              key: _stepKey,
               dataSource: _dataSource,
               onActivityChanged: (type) => _announcer.onActivityUpdate(type),
             ),
             const SizedBox(height: 16),
-            const RouteMapWidget(),
+            RouteMapWidget(key: _routeKey),
           ],
         ),
       ),

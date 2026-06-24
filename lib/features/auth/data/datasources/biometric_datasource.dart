@@ -1,5 +1,6 @@
+import 'package:local_auth/local_auth.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:flutter/services.dart';
-import '../../../../core/platform/platform_channels.dart';
 import '../../domain/entities/auth_result.dart';
 
 /// DataSource para autenticación biométrica usando Platform Channels
@@ -14,20 +15,18 @@ abstract class BiometricDataSource {
 class BiometricDataSourceImpl implements BiometricDataSource {
   /// MethodChannel: canal de comunicación Flutter ↔ Android
   /// El nombre debe ser exactamente igual en ambos lados
-  final MethodChannel _channel =
-      const MethodChannel(PlatformChannels.biometric);
+  final LocalAuthentication _auth = LocalAuthentication();
 
   @override
   Future<bool> canAuthenticate() async {
     try {
-      /// invokeMethod: envía un mensaje a Android y espera respuesta
-      /// - Parámetro 1: nombre del método (debe coincidir en Android)
-      /// - Retorna: un Future con la respuesta
-      final result = await _channel.invokeMethod<bool>('checkBiometricSupport');
+      final canCheck = await _auth.canCheckBiometrics;
+      if (!canCheck) return false;
 
-      return result ?? false;
+      final available = await _auth.getAvailableBiometrics();
+      return available.isNotEmpty;
     } on PlatformException catch (e) {
-      print('Error verificando biometría: ${e.message}');
+      print('BiometricDataSource.canAuthenticate error: ${e.message}');
       return false;
     }
   }
@@ -35,19 +34,34 @@ class BiometricDataSourceImpl implements BiometricDataSource {
   @override
   Future<AuthResult> authenticate() async {
     try {
-      /// Llamamos al método 'authenticate' del lado Android
-      final result = await _channel.invokeMethod<bool>('authenticate');
+      final authenticated = await _auth.authenticate(
+        localizedReason:
+            'Usa tu huella dactilar para acceder a Fitness Tracker',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+          sensitiveTransaction: false,
+        ),
+      );
 
       return AuthResult(
-        success: result ?? false,
+        success: authenticated,
         message:
-            result == true ? 'Autenticación exitosa' : 'Autenticación fallida',
+            authenticated ? 'Autenticación exitosa' : 'Autenticación cancelada',
       );
     } on PlatformException catch (e) {
-      return AuthResult(
-        success: false,
-        message: 'Error: ${e.message}',
-      );
+      final message = switch (e.code) {
+        auth_error.notAvailable =>
+          'Biometría no disponible en este dispositivo',
+        auth_error.notEnrolled =>
+          'No hay huellas registradas. Configura una en Ajustes',
+        auth_error.lockedOut =>
+          'Demasiados intentos fallidos. Intenta más tarde',
+        auth_error.permanentlyLockedOut =>
+          'Biometría bloqueada. Usa el PIN del dispositivo',
+        _ => 'Error de autenticación: ${e.message}',
+      };
+      return AuthResult(success: false, message: message);
     }
   }
 }

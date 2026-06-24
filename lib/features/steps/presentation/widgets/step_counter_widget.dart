@@ -20,16 +20,20 @@ class StepCounterWidget extends StatefulWidget {
   });
 
   @override
-  State<StepCounterWidget> createState() => _StepCounterWidgetState();
+  State<StepCounterWidget> createState() => StepCounterWidgetState();
 }
 
-class _StepCounterWidgetState extends State<StepCounterWidget> {
+class StepCounterWidgetState extends State<StepCounterWidget> {
   late final AccelerometerDataSource _dataSource;
 
   StreamSubscription<StepData>? _subscription;
   StepData? _currentData;
   bool _isTracking = false;
   final List<double> _magnitudeHistory = [];
+
+  int get stepCount => _currentData?.stepCount ?? 0;
+  double get calories => _currentData?.estimatedCalories ?? 0;
+  ActivityType? get activityType => _currentData?.activityType;
 
   @override
   void initState() {

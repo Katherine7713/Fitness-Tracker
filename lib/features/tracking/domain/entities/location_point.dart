@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:math' as math;
 
 /// Punto de ubicación GPS
@@ -19,14 +20,14 @@ class LocationPoint extends Equatable {
     required this.timestamp,
   });
 
-  factory LocationPoint.fromMap(Map<dynamic, dynamic> map) {
+  factory LocationPoint.fromPosition(Position position) {
     return LocationPoint(
-      latitude: (map['latitude'] as num).toDouble(),
-      longitude: (map['longitude'] as num).toDouble(),
-      altitude: (map['altitude'] as num?)?.toDouble() ?? 0,
-      speed: (map['speed'] as num?)?.toDouble() ?? 0,
-      accuracy: (map['accuracy'] as num?)?.toDouble() ?? 0,
-      timestamp: DateTime.now(),
+      latitude: position.latitude,
+      longitude: position.longitude,
+      altitude: position.altitude,
+      speed: position.speed,
+      accuracy: position.accuracy,
+      timestamp: position.timestamp,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Route;
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 import '../../data/datasources/gps_datasource.dart';
 import '../../domain/entities/location_point.dart';
 
@@ -7,16 +8,18 @@ class RouteMapWidget extends StatefulWidget {
   const RouteMapWidget({super.key});
 
   @override
-  State<RouteMapWidget> createState() => _RouteMapWidgetState();
+  State<RouteMapWidget> createState() => RouteMapWidgetState();
 }
 
-class _RouteMapWidgetState extends State<RouteMapWidget> {
+class RouteMapWidgetState extends State<RouteMapWidget> {
   final GpsDataSource _dataSource = GpsDataSourceImpl();
   final Route _route = Route();
 
   StreamSubscription<LocationPoint>? _subscription;
   bool _isTracking = false;
   String _statusMessage = 'Presiona Iniciar';
+
+  Route get routeData => _route;
 
   @override
   void dispose() {
@@ -35,59 +38,47 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
   Future<void> _startTracking() async {
     final hasPermission = await _dataSource.requestPermissions();
     if (!hasPermission) {
-      setState(() {
-        _statusMessage = 'Permisos denegados';
-      });
+      if (mounted) {
+        setState(() => _statusMessage = 'Permisos de ubicación denegados');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Activa los permisos de ubicación en Ajustes'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
     final gpsEnabled = await _dataSource.isGpsEnabled();
     if (!gpsEnabled) {
-      setState(() {
-        _statusMessage = 'Activa el GPS';
-      });
+      if (mounted) {
+        setState(() => _statusMessage = 'Activa el GPS del dispositivo');
+        await Geolocator.openLocationSettings();
+      }
       return;
     }
 
     _subscription = _dataSource.locationStream.listen(
       (point) {
-        print(
-            '📍 GPS: ${point.latitude}, ${point.longitude}, acc=${point.accuracy}m');
-
-        if (_route.points.isEmpty) {
-          setState(() {
-            _route.addPoint(point);
-            _statusMessage = 'Tracking - ${_route.points.length} puntos';
-          });
-        } else {
-          final lastPoint = _route.points.last;
-          final distance = lastPoint.distanceTo(point);
-
-          if (distance >= 2) {
-            setState(() {
-              _route.addPoint(point);
-              _statusMessage = 'Tracking - ${_route.points.length} puntos';
-            });
-          }
-        }
+        setState(() {
+          _route.addPoint(point);
+          _statusMessage = 'Tracking — ${_route.points.length} puntos';
+        });
       },
       onError: (error) {
-        print('❌ GPS Error: $error');
-        setState(() {
-          _statusMessage = 'Error: $error';
-        });
+        if (mounted) {
+          setState(() => _statusMessage = 'Error GPS: $error');
+        }
       },
     );
 
-    setState(() {
-      _isTracking = true;
-    });
+    setState(() => _isTracking = true);
   }
 
   void _stopTracking() {
     _subscription?.cancel();
     _route.finish();
-
     setState(() {
       _isTracking = false;
       _statusMessage = 'Ruta finalizada';
@@ -127,7 +118,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   _statusMessage,
                   style: TextStyle(
@@ -161,30 +152,22 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
 
           // Métricas
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
+                _buildMetric(Icons.straighten,
+                    '${_route.distanceKm.toStringAsFixed(2)} km', 'Distancia'),
                 _buildMetric(
-                  icon: Icons.straighten,
-                  value: '${_route.distanceKm.toStringAsFixed(2)} km',
-                  label: 'Distancia',
-                ),
+                    Icons.timer, _formatDuration(_route.duration), 'Tiempo'),
                 _buildMetric(
-                  icon: Icons.timer,
-                  value: _formatDuration(_route.duration),
-                  label: 'Tiempo',
-                ),
+                    Icons.speed,
+                    '${_route.averageSpeed.toStringAsFixed(1)} km/h',
+                    'Velocidad'),
                 _buildMetric(
-                  icon: Icons.speed,
-                  value: '${_route.averageSpeed.toStringAsFixed(1)} km/h',
-                  label: 'Velocidad',
-                ),
-                _buildMetric(
-                  icon: Icons.local_fire_department,
-                  value: '${_route.estimatedCalories.toStringAsFixed(0)}',
-                  label: 'Calorías',
-                ),
+                    Icons.local_fire_department,
+                    '${_route.estimatedCalories.toStringAsFixed(0)}',
+                    'Calorías'),
               ],
             ),
           ),
@@ -193,11 +176,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
     );
   }
 
-  Widget _buildMetric({
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
+  Widget _buildMetric(IconData icon, String value, String label) {
     return Column(
       children: [
         Icon(icon, color: const Color(0xFF6366F1)),
@@ -209,19 +188,15 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
     );
   }
 
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '${hours}h ${minutes}m';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) return '${h}h ${m}m';
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 }
 
-/// CustomPainter para dibujar la ruta
 class RoutePainter extends CustomPainter {
   final Route route;
 
@@ -230,84 +205,61 @@ class RoutePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (route.points.isEmpty) {
-      final textPainter = TextPainter(
+      final tp = TextPainter(
         text: const TextSpan(
           text: 'Sin datos de ruta',
           style: TextStyle(color: Colors.grey, fontSize: 14),
         ),
         textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(
-          (size.width - textPainter.width) / 2,
-          (size.height - textPainter.height) / 2,
-        ),
-      );
+      )..layout();
+      tp.paint(canvas,
+          Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2));
       return;
     }
 
-    // Calcular bounds
-    double minLat = route.points.first.latitude;
-    double maxLat = route.points.first.latitude;
-    double minLon = route.points.first.longitude;
-    double maxLon = route.points.first.longitude;
-
-    for (final point in route.points) {
-      if (point.latitude < minLat) minLat = point.latitude;
-      if (point.latitude > maxLat) maxLat = point.latitude;
-      if (point.longitude < minLon) minLon = point.longitude;
-      if (point.longitude > maxLon) maxLon = point.longitude;
+    double minLat = route.points.first.latitude, maxLat = minLat;
+    double minLon = route.points.first.longitude, maxLon = minLon;
+    for (final p in route.points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLon) minLon = p.longitude;
+      if (p.longitude > maxLon) maxLon = p.longitude;
     }
 
-    final padding = 20.0;
-    final drawWidth = size.width - padding * 2;
-    final drawHeight = size.height - padding * 2;
+    const padding = 20.0;
+    final dw = size.width - padding * 2;
+    final dh = size.height - padding * 2;
 
-    Offset toPixel(LocationPoint point) {
-      final latRange = maxLat - minLat;
-      final lonRange = maxLon - minLon;
-
-      final x = lonRange == 0
-          ? drawWidth / 2
-          : ((point.longitude - minLon) / lonRange) * drawWidth;
-      final y = latRange == 0
-          ? drawHeight / 2
-          : ((maxLat - point.latitude) / latRange) * drawHeight;
-
+    Offset toPixel(LocationPoint pt) {
+      final lr = maxLat - minLat, lr2 = maxLon - minLon;
+      final x = lr2 == 0 ? dw / 2 : ((pt.longitude - minLon) / lr2) * dw;
+      final y = lr == 0 ? dh / 2 : ((maxLat - pt.latitude) / lr) * dh;
       return Offset(x + padding, y + padding);
     }
 
-    // Dibujar línea
-    final linePaint = Paint()
-      ..color = const Color(0xFF6366F1)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path();
-    path.moveTo(toPixel(route.points.first).dx, toPixel(route.points.first).dy);
-
-    for (int i = 1; i < route.points.length; i++) {
-      final pixel = toPixel(route.points[i]);
-      path.lineTo(pixel.dx, pixel.dy);
+    final path = Path()
+      ..moveTo(toPixel(route.points.first).dx, toPixel(route.points.first).dy);
+    for (var i = 1; i < route.points.length; i++) {
+      path.lineTo(toPixel(route.points[i]).dx, toPixel(route.points[i]).dy);
     }
 
-    canvas.drawPath(path, linePaint);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF6366F1)
+        ..strokeWidth = 4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
 
-    // Punto inicio (verde)
-    final startPaint = Paint()..color = Colors.green;
-    canvas.drawCircle(toPixel(route.points.first), 8, startPaint);
-
-    // Punto final (rojo)
-    final endPaint = Paint()..color = Colors.red;
-    canvas.drawCircle(toPixel(route.points.last), 8, endPaint);
+    canvas.drawCircle(
+        toPixel(route.points.first), 8, Paint()..color = Colors.green);
+    canvas.drawCircle(
+        toPixel(route.points.last), 8, Paint()..color = Colors.red);
   }
 
   @override
-  bool shouldRepaint(RoutePainter oldDelegate) {
-    return oldDelegate.route.points.length != route.points.length;
-  }
+  bool shouldRepaint(RoutePainter old) =>
+      old.route.points.length != route.points.length;
 }

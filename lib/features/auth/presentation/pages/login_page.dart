@@ -27,10 +27,9 @@ class LoginPage extends StatelessWidget {
           builder: (context, state) {
             return Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                image: DecorationImage(
+                  image: AssetImage('lib/assets/login.png'),
+                  fit: BoxFit.cover,
                 ),
               ),
               child: SafeArea(
@@ -38,11 +37,6 @@ class LoginPage extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.fitness_center,
-                        size: 100,
-                        color: Colors.white,
-                      ),
                       const SizedBox(height: 24),
                       const Text(
                         'Fitness Tracker',
