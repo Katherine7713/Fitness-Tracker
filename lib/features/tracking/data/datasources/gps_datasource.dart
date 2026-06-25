@@ -1,11 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 import '../../domain/entities/location_point.dart';
 
-/// DataSource para GPS
-///
-/// EXPLICACIÓN DIDÁCTICA:
-/// - Combina MethodChannel (operaciones puntuales)
-/// - Con EventChannel (stream de ubicaciones)
 abstract class GpsDataSource {
   Future<LocationPoint?> getCurrentLocation();
   Stream<LocationPoint> get locationStream;
@@ -55,7 +50,7 @@ class GpsDataSourceImpl implements GpsDataSource {
   Stream<LocationPoint> get locationStream {
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 2, // metros mínimos entre actualizaciones
+      distanceFilter: 1,
     );
 
     return Geolocator.getPositionStream(locationSettings: locationSettings)

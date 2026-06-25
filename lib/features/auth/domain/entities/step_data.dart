@@ -24,7 +24,6 @@ class StepData extends Equatable {
   /// Calorías estimadas (0.04 cal por paso)
   double get estimatedCalories => stepCount * 0.04;
 
-  /// Factory para crear desde Map del Platform Channel
   factory StepData.fromMap(Map<dynamic, dynamic> map) {
     final activityTypeString = map['activityType'] as String;
 

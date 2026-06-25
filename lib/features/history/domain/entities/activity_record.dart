@@ -5,6 +5,7 @@ enum ActivityCategory {
   running,
   cycling,
   gym,
+  stationary,
   other,
 }
 
@@ -14,6 +15,7 @@ extension ActivityCategoryX on ActivityCategory {
         ActivityCategory.running => 'Carrera',
         ActivityCategory.cycling => 'Ciclismo',
         ActivityCategory.gym => 'Gimnasio',
+        ActivityCategory.stationary => 'Quieto',
         ActivityCategory.other => 'Otra',
       };
 
@@ -22,6 +24,7 @@ extension ActivityCategoryX on ActivityCategory {
         ActivityCategory.running => '🏃',
         ActivityCategory.cycling => '🚴',
         ActivityCategory.gym => '🏋️',
+        ActivityCategory.stationary => '🧍',
         ActivityCategory.other => '⚡',
       };
 

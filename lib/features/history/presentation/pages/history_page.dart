@@ -21,7 +21,6 @@ class _HistoryPageState extends State<HistoryPage> {
     context.read<HistoryBloc>().add(HistoryLoadRequested());
   }
 
-  // ── CRUD actions ─────────────────────────────
 
   void _openForm({ActivityRecord? record}) {
     showModalBottomSheet(
@@ -168,10 +167,8 @@ class _HistoryPageState extends State<HistoryPage> {
 
           return Column(
             children: [
-              // Banner de estadísticas
               if (_showStats && stats != null) _StatsBanner(stats: stats),
 
-              // Lista
               Expanded(
                 child: records.isEmpty
                     ? _EmptyState(onAdd: () => _openForm())

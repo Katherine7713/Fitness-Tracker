@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-/// Resultado de la autenticación biométrica
 class AuthResult extends Equatable {
   final bool success;
   final String? message;

@@ -3,18 +3,13 @@ import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:flutter/services.dart';
 import '../../domain/entities/auth_result.dart';
 
-/// DataSource para autenticación biométrica usando Platform Channels
-/// - Este es el LADO FLUTTER del Platform Channel
-/// - Usamos MethodChannel porque es petición/respuesta
-/// - El nombre del canal DEBE coincidir con el lado Android
 abstract class BiometricDataSource {
   Future<bool> canAuthenticate();
   Future<AuthResult> authenticate();
 }
 
 class BiometricDataSourceImpl implements BiometricDataSource {
-  /// MethodChannel: canal de comunicación Flutter ↔ Android
-  /// El nombre debe ser exactamente igual en ambos lados
+  
   final LocalAuthentication _auth = LocalAuthentication();
 
   @override

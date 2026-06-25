@@ -68,9 +68,7 @@ class AccelerometerDataSourceImpl implements AccelerometerDataSource {
     // ═══════════════════════════════════════════════
     // REGLA 2: Anti-bounce 300ms para pasos
     // ═══════════════════════════════════════════════
-    // Solo cuenta paso si:
-    //   a) magnitud > 13.0 (umbral de caminata)
-    //   b) han pasado >300ms desde el último paso
+
     if (magnitude > _walkThreshold &&
         now.difference(_lastStepTime).inMilliseconds > _debounceDelay.inMilliseconds) {
       _stepCount++;
@@ -80,7 +78,6 @@ class AccelerometerDataSourceImpl implements AccelerometerDataSource {
     // ═══════════════════════════════════════════════
     // REGLA 3: Ventanas de tiempo para estados
     // ═══════════════════════════════════════════════
-    // Actualizar timestamp de cada umbral
     if (magnitude > _runThreshold) {
       _lastRunTime = now;
     }
@@ -88,7 +85,6 @@ class AccelerometerDataSourceImpl implements AccelerometerDataSource {
       _lastWalkTime = now;
     }
 
-    // Determinar estado por ventanas de 3 segundos
     final activityType = _resolveActivity(now);
 
     _controller?.add(StepData(
@@ -100,15 +96,12 @@ class AccelerometerDataSourceImpl implements AccelerometerDataSource {
   }
 
   ActivityType _resolveActivity(DateTime now) {
-    // Si hay running en los últimos 3s → CORRIENDO
     if (now.difference(_lastRunTime) < _timeWindow) {
       return ActivityType.running;
     }
-    // Si hay walking en los últimos 3s → CAMINANDO
     if (now.difference(_lastWalkTime) < _timeWindow) {
       return ActivityType.walking;
     }
-    // Si pasaron 3s sin actividad → QUIETO
     return ActivityType.stationary;
   }
 

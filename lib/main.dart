@@ -75,7 +75,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (_showLogin) {
       return LoginPage(onAuthSuccess: _onAuthSuccess);
     }
-    return WelcomeScreen(onSwipeUp: _onSwipeUp);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) {
+        if (details.primaryDelta! < -5) {
+          _onSwipeUp();
+        }
+      },
+      child: WelcomeScreen(onSwipeUp: _onSwipeUp),
+    );
   }
 }
 
@@ -127,10 +135,11 @@ class _HomePageState extends State<HomePage> {
         ? ActivityCategory.walking
         : stepState.activityType == ActivityType.running
             ? ActivityCategory.running
-            : ActivityCategory.other;
+            : ActivityCategory.stationary;
 
     final route = routeState?.routeData;
-    final startTime = route?.startTime ?? now.subtract(const Duration(minutes: 30));
+    final startTime =
+        route?.startTime ?? now.subtract(const Duration(minutes: 30));
     final endTime = route?.endTime ?? now;
 
     final record = ActivityRecord(
